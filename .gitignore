@@ -1,0 +1,22 @@
+# Real config with your account id / dashboard id / user arn - NEVER commit
+config.json
+*.local.json
+
+# Deploy state (contains your account-specific resource ids)
+.deploy-state.json
+
+# Generated secrets / passwords - NEVER commit
+_*.txt
+_*.json
+*-password.txt
+
+# Build artifacts
+function.zip
+lambda/quicksight-embedding-js-sdk.min.js
+__pycache__/
+*.pyc
+
+# Any exported dashboard data
+dashboard-export/
+*.qs
+*.pdf

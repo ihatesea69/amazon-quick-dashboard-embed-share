@@ -1,0 +1,9 @@
+This project downloads the Amazon QuickSight Embedding SDK at deploy time
+(amazon-quicksight-embedding-sdk) and serves it from the Lambda. That SDK is
+distributed by Amazon under the Apache License 2.0 and is NOT part of this
+repository (it is fetched during deploy and is gitignored). See:
+
+  https://github.com/awslabs/amazon-quicksight-embedding-sdk
+  https://www.npmjs.com/package/amazon-quicksight-embedding-sdk
+
+No other third-party code is bundled in this repository.
