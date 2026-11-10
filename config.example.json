@@ -1,0 +1,12 @@
+{
+  "awsProfile": "default",
+  "region": "us-east-1",
+  "accountId": "123456789012",
+  "dashboardId": "your-dashboard-id",
+  "userArn": "arn:aws:quicksight:us-east-1:123456789012:user/default/your-registered-user",
+  "functionName": "quick-dashboard-share",
+  "sessionMinutes": 120,
+  "priceClass": "PriceClass_100",
+  "mintRoleArn": "",
+  "mintExternalId": ""
+}

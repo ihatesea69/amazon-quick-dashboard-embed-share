@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<style>
+  :root { --bg:#0f1b2d; --panel:#16263d; --fg:#eaf1fb; --muted:#9db2cf; --accent:#2f6df0; --err:#ff6b6b; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; font-family:"Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; align-items:center; gap:10px; padding:8px 14px; background:var(--panel); border-bottom:1px solid #22354f; }
+  header b { font-size:14px; } header span { color:var(--muted); font-size:12px; }
+  #frame { position:absolute; top:41px; left:0; right:0; bottom:0; }
+  #frame iframe { border:0; width:100%; height:100%; }
+  #gate { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:10; }
+  .card { background:var(--panel); padding:28px 26px; border-radius:12px; width:330px; box-shadow:0 10px 40px rgba(0,0,0,.5); }
+  .card h1 { font-size:17px; margin:0 0 4px; }
+  .card p { color:var(--muted); font-size:12.5px; margin:0 0 18px; line-height:1.5; }
+  .card input { width:100%; padding:11px 12px; border-radius:8px; border:1px solid #2b4063; background:#0d1626; color:var(--fg); font-size:14px; }
+  .card button { width:100%; margin-top:12px; padding:11px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:14px; cursor:pointer; }
+  .card button:disabled { opacity:.6; cursor:default; }
+  .err { color:var(--err); font-size:12.5px; margin-top:10px; min-height:16px; }
+  #loading { position:fixed; inset:0; display:none; align-items:center; justify-content:center; color:var(--muted); z-index:5; }
+</style>
+</head>
+<body>
+<header>
+  <b>Dashboard</b>
+  <span>&middot; read only &middot; shared view</span>
+</header>
+<div id="frame"></div>
+<div id="loading">Loading dashboard...</div>
+
+<div id="gate">
+  <div class="card">
+    <h1>View the dashboard</h1>
+    <p>Enter the password to continue. No Microsoft / QuickSight account needed.</p>
+    <input id="pwd" type="password" placeholder="Password" autocomplete="off" autofocus>
+    <button id="go">Open</button>
+    <div class="err" id="err"></div>
+  </div>
+</div>
+
+<script src="/quicksight-embedding-js-sdk.min.js"></script>
+<script>
+const gate = document.getElementById('gate');
+const loading = document.getElementById('loading');
+const errEl = document.getElementById('err');
+const pwdEl = document.getElementById('pwd');
+const goBtn = document.getElementById('go');
+
+async function render(url){
+  loading.style.display = 'flex';
+  try {
+    const ctx = await QuickSightEmbedding.createEmbeddingContext();
+    await ctx.embedDashboard({
+      url,
+      container: document.getElementById('frame'),
+      height: '100%', width: '100%',
+      resizeHeightOnSizeChangedEvent: true,
+    });
+  } catch(e){
+    errEl.textContent = 'Render error: ' + e;
+    gate.style.display = 'flex';
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
+async function loadDash(){
+  const r = await fetch('/api/embed', {cache:'no-store'});
+  if (r.status === 401){ gate.style.display='flex'; return; }
+  const j = await r.json();
+  if (j.embedUrl){ gate.style.display='none'; render(j.embedUrl); }
+  else { gate.style.display='flex'; errEl.textContent = j.error || 'could not mint embed URL'; }
+}
+
+async function sha256hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function doAuth(){
+  const pwd = pwdEl.value;
+  if (!pwd) return;
+  goBtn.disabled = true; errEl.textContent = '';
+  try {
+    // CloudFront OAC signs POST requests only if the viewer sends x-amz-content-sha256
+    // (SHA256 of the body). Without it the Lambda URL returns 403. GET needs nothing.
+    const bodyStr = JSON.stringify({password: pwd});
+    const payloadHash = await sha256hex(bodyStr);
+    const r = await fetch('/auth', {method:'POST', headers:{'Content-Type':'application/json','x-amz-content-sha256':payloadHash}, body: bodyStr});
+    if (r.ok){ pwdEl.value=''; await loadDash(); }
+    else if (r.status === 429){ errEl.textContent = 'Too many attempts. Wait 5 minutes.'; }
+    else if (r.status === 403){ errEl.textContent = 'Request signing error (403). Hard-reload the page (Ctrl+Shift+R) and retry.'; }
+    else { errEl.textContent = 'Wrong password.'; }
+  } catch(e){ errEl.textContent = 'Connection error: ' + e; }
+  finally { goBtn.disabled = false; }
+}
+
+goBtn.addEventListener('click', doAuth);
+pwdEl.addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(); });
+
+(async () => {
+  try {
+    const r = await fetch('/api/session', {cache:'no-store'});
+    const j = await r.json();
+    if (j.authed) { gate.style.display='none'; loadDash(); }
+    else { gate.style.display='flex'; }
+  } catch(e){ gate.style.display='flex'; }
+})();
+</script>
+</body>
+</html>
